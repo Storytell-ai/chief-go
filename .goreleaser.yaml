@@ -1,0 +1,28 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+# chief-go ships no binaries; goreleaser is used only to cut the GitHub release
+# and assemble the changelog.
+builds:
+  - skip: true
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+  groups:
+    - title: New Features
+      regexp: '^.*feat[:(].*$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*fix[:(].*$'
+      order: 1
+    - title: Others
+      order: 999
