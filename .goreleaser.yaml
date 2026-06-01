@@ -12,6 +12,10 @@ builds:
 changelog:
   sort: asc
   use: github
+  # The first release has no previous tag, so goreleaser falls back to the git
+  # changelog, whose default entry embeds the committer name and email. Render
+  # just the commit subject instead.
+  format: '{{ .Message }}'
   filters:
     exclude:
       - '^docs:'
