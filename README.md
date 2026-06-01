@@ -28,6 +28,7 @@ Credentials can be passed as options or read from the environment:
 
 Resources supported by this package:
 
+- [x] Chats (`/v1/chats`)
 - [x] Assets (`/v1/assets`)
 - [x] Labels (`/v1/labels`)
 - [x] Actions (`/v1/actions`)
@@ -148,6 +149,63 @@ func main() {
 	// pause it, then resume it.
 	_, _ = client.Actions.Disable(ctx, action.ActionID)
 	_, _ = client.Actions.Enable(ctx, action.ActionID)
+}
+```
+
+Chat turns run asynchronously: `Create` and `SendMessage` return as soon as the workflow is accepted. `WaitForResponse` polls `GetMessage` until the turn finishes; call `GetMessage` directly to poll on your own schedule. Here is an example that opens a chat, waits for the answer, then asks a follow-up:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/Storytell-ai/chief-go/chief"
+)
+
+func main() {
+	client, err := chief.New(
+		chief.WithAPIKey(os.Getenv("CHIEF_API_KEY")),
+		chief.WithProjectID(os.Getenv("CHIEF_PROJECT_ID")),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// open a chat with its first turn; the turn runs asynchronously.
+	created, err := client.Chats.Create(ctx, &chief.CreateChatRequest{
+		Prompt: "What changed in the codebase this week?",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// block until the response is populated.
+	msg, err := client.Chats.WaitForResponse(ctx, created.ChatID, created.MessageID, 2*time.Minute)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("answer: %s\n", msg.Response)
+
+	// ask a follow-up in the same chat.
+	sent, err := client.Chats.SendMessage(ctx, created.ChatID, &chief.SendMessageRequest{
+		Prompt: "Now summarize that in one sentence.",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	follow, err := client.Chats.WaitForResponse(ctx, created.ChatID, sent.MessageID, 2*time.Minute)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("follow-up: %s\n", follow.Response)
 }
 ```
 

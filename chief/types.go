@@ -350,3 +350,100 @@ type ProjectPage struct {
 	LastID  string    `json:"last_id"`
 	HasMore bool      `json:"has_more"`
 }
+
+// CreateChatRequest opens a chat with its first turn. Intelligence selects a
+// mode — "fast", "expert", or "research"; an empty value is sent as "auto".
+// Provider biases vendor choice — "automatic", "anthropic", "openai", or
+// "google" — and empty uses the router's default order. PublicData nil follows
+// the mode default; false disables public-web search. A nil Scope defaults to
+// the configured project; set Scope to narrow to specific assets, chats, or
+// labels.
+type CreateChatRequest struct {
+	Prompt       string        `json:"prompt"`
+	Intelligence string        `json:"intelligence,omitempty"`
+	Provider     string        `json:"provider,omitempty"`
+	Skills       []string      `json:"skills,omitempty"`
+	PublicData   *bool         `json:"public_data,omitempty"`
+	Scope        *ScopeRequest `json:"scope,omitempty"`
+}
+
+// SendMessageRequest appends a turn to an existing chat. The tuning fields
+// carry the same semantics as on CreateChatRequest.
+type SendMessageRequest struct {
+	Prompt       string        `json:"prompt"`
+	Intelligence string        `json:"intelligence,omitempty"`
+	Provider     string        `json:"provider,omitempty"`
+	Skills       []string      `json:"skills,omitempty"`
+	PublicData   *bool         `json:"public_data,omitempty"`
+	Scope        *ScopeRequest `json:"scope,omitempty"`
+}
+
+// UpdateChatRequest renames a chat. Title is the only mutable chat field and
+// the server rejects an empty value.
+type UpdateChatRequest struct {
+	Title string `json:"title"`
+}
+
+// CreateChatResponse acknowledges an accepted chat turn. The turn runs
+// asynchronously: poll GetMessage with MessageID until its prompt and response
+// populate.
+type CreateChatResponse struct {
+	ChatID    string    `json:"chat_id"`
+	MessageID string    `json:"message_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// SendMessageResponse acknowledges an accepted follow-up turn. The turn runs
+// asynchronously: poll GetMessage with MessageID until its prompt and response
+// populate.
+type SendMessageResponse struct {
+	MessageID string    `json:"message_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ChatResponse is chat-level metadata. ModifiedAt is nil until the chat has a
+// turn.
+type ChatResponse struct {
+	ChatID     string     `json:"chat_id"`
+	ModifiedAt *time.Time `json:"modified_at,omitempty"`
+}
+
+// ChatSummary is the per-item shape in a chat listing.
+type ChatSummary struct {
+	ChatID    string    `json:"chat_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ChatPage is one page of a chat listing.
+type ChatPage struct {
+	Data    []ChatSummary `json:"data"`
+	FirstID string        `json:"first_id"`
+	LastID  string        `json:"last_id"`
+	HasMore bool          `json:"has_more"`
+}
+
+// Message is one turn: the user prompt and the assistant response under a
+// single id. Prompt and Response stay empty until the async turn finishes
+// writing its recording; there is no status field, so poll GetMessage until
+// the content is present.
+type Message struct {
+	ID        string     `json:"id"`
+	Prompt    string     `json:"prompt,omitempty"`
+	Response  string     `json:"response,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+}
+
+// MessageSummary is the per-item shape in a message listing. Content is fetched
+// separately so the listing stays small.
+type MessageSummary struct {
+	ID        string     `json:"id"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+}
+
+// MessageList is a chat's full message listing. It's a wrapper rather than a
+// bare slice because the endpoint is unpaginated today and the wire shape gains
+// a cursor field additively when pagination lands, keeping that change
+// non-breaking.
+type MessageList struct {
+	Messages []MessageSummary `json:"messages"`
+}

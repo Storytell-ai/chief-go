@@ -45,6 +45,7 @@ type Client struct {
 	debug              bool
 	insecureSkipVerify bool
 
+	Chats    *ChatsService
 	Assets   *AssetsService
 	Labels   *LabelsService
 	Actions  *ActionsService
@@ -121,6 +122,7 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
+	c.Chats = &ChatsService{client: c}
 	c.Assets = &AssetsService{client: c}
 	c.Labels = &LabelsService{client: c}
 	c.Actions = &ActionsService{client: c}
