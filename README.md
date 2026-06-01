@@ -1,6 +1,6 @@
 # chief-go
 
-Go client library for the [Storytell](https://storytell.ai/) Chief public REST API.
+Go client library for the [Chief](https://chief.bot/) Chief public REST API.
 
 It depends only on the standard library, so it can be vendored into external tools without pulling in any third-party packages.
 
@@ -31,7 +31,7 @@ Resources supported by this package:
 - [x] Assets (`/v1/assets`)
 - [x] Labels (`/v1/labels`)
 - [x] Actions (`/v1/actions`)
-- [x] Sessions (`/v1/sessions`)
+- [x] Live-Sessions (`/v1/sessions`)
 - [x] Skills (`/v1/skills`)
 - [x] Memories (`/v1/memories`)
 - [x] Projects (`/v1/projects`)
@@ -161,10 +161,6 @@ if err != nil {
 	switch {
 	case chief.IsNotFound(err):
 		// 404
-	case chief.IsUnauthorized(err):
-		// 401
-	case chief.IsRateLimited(err):
-		// 429
 	default:
 		if apiErr, ok := chief.IsAPIError(err); ok {
 			log.Printf("chief: %s (%s)", apiErr.Humane, apiErr.Code)
