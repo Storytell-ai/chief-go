@@ -21,10 +21,19 @@ func (s *LabelsService) Create(ctx context.Context, req *CreateLabelRequest) (*L
 	return &label, nil
 }
 
-// List returns every label in the configured project.
-func (s *LabelsService) List(ctx context.Context) (*LabelPage, error) {
+// List returns a page of labels in the configured project.
+func (s *LabelsService) List(ctx context.Context, opts ...ListOption) (*LabelPage, error) {
+	q := url.Values{}
+	for _, opt := range opts {
+		opt(q)
+	}
+	path := "/v1/labels"
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
 	var page LabelPage
-	if _, err := s.client.Do(ctx, http.MethodGet, "/v1/labels", nil, &page); err != nil {
+	if _, err := s.client.Do(ctx, http.MethodGet, path, nil, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
