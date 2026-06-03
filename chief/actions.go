@@ -21,10 +21,19 @@ func (s *ActionsService) Create(ctx context.Context, req *ActionRequest) (*Actio
 	return &action, nil
 }
 
-// List returns every action in the configured project.
-func (s *ActionsService) List(ctx context.Context) (*ActionPage, error) {
+// List returns a page of actions in the configured project.
+func (s *ActionsService) List(ctx context.Context, opts ...ListOption) (*ActionPage, error) {
+	q := url.Values{}
+	for _, opt := range opts {
+		opt(q)
+	}
+	path := "/v1/actions"
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
 	var page ActionPage
-	if _, err := s.client.Do(ctx, http.MethodGet, "/v1/actions", nil, &page); err != nil {
+	if _, err := s.client.Do(ctx, http.MethodGet, path, nil, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
