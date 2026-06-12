@@ -14,7 +14,7 @@ go get github.com/Storytell-ai/chief-go/chief
 
 A Personal Access Token is required to interact with the Chief API. It is sent as the `X-API-Key` header.
 
-Most routes are project-scoped and also need a project ID, sent as the `X-Project-Id` header. The `Projects.List` call is the exception: it works with only an API key and returns the projects the key can reach.
+Most routes are project-scoped and also need a project ID, sent as the `X-Project-Id` header. The `Projects` service is the exception: its calls (list, create, update, members, invitations) work with only an API key and operate on the projects the key can reach.
 
 Credentials can be passed as options or read from the environment:
 
