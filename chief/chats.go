@@ -122,6 +122,91 @@ func (s *ChatsService) DeleteMessage(ctx context.Context, chatID, messageID stri
 	return err
 }
 
+// SetVisibility changes a chat's access level. Setting Restricted keeps any
+// audience the chat already had; switching to Project or Private clears it.
+func (s *ChatsService) SetVisibility(ctx context.Context, chatID string, visibility ChatVisibility) (*ChatVisibilityResponse, error) {
+	var resp ChatVisibilityResponse
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/visibility"
+	if _, err := s.client.Do(ctx, http.MethodPost, path, &SetChatVisibilityRequest{Visibility: visibility}, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListMembers returns a restricted chat's audience.
+func (s *ChatsService) ListMembers(ctx context.Context, chatID string) (*ChatMemberList, error) {
+	var list ChatMemberList
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/members"
+	if _, err := s.client.Do(ctx, http.MethodGet, path, nil, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+// AddMember adds one project member to a restricted chat's audience by email.
+// Idempotent: re-adding an existing member succeeds without change. The chat's
+// visibility must already be Restricted; other levels respond 409.
+func (s *ChatsService) AddMember(ctx context.Context, chatID, email string) (*ChatMember, error) {
+	var member ChatMember
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/members"
+	if _, err := s.client.Do(ctx, http.MethodPost, path, &AddChatMemberRequest{Email: email}, &member); err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+// RemoveMember removes one user from a restricted chat's audience. Use the
+// UserID returned by ListMembers. The chat's visibility must already be
+// Restricted; other levels respond 409.
+func (s *ChatsService) RemoveMember(ctx context.Context, chatID, userID string) error {
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/members/" + url.PathEscape(userID)
+	_, err := s.client.Do(ctx, http.MethodDelete, path, nil, nil)
+	return err
+}
+
+// CreateShareLink creates the chat's public share link. Anyone with the URL
+// can read the conversation without authentication. Each chat has at most one
+// active link: when one already exists it is returned unchanged; use
+// RegenerateShareLink to rotate it.
+func (s *ChatsService) CreateShareLink(ctx context.Context, chatID string) (*ShareLinkResponse, error) {
+	var link ShareLinkResponse
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/share"
+	if _, err := s.client.Do(ctx, http.MethodPost, path, nil, &link); err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+// RegenerateShareLink revokes the chat's current share link, if any, and mints
+// a new URL.
+func (s *ChatsService) RegenerateShareLink(ctx context.Context, chatID string) (*ShareLinkResponse, error) {
+	var link ShareLinkResponse
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/share?regenerate=true"
+	if _, err := s.client.Do(ctx, http.MethodPost, path, nil, &link); err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+// GetShareLink returns the chat's share-link status. URL and CreatedAt are
+// empty when the chat isn't shared.
+func (s *ChatsService) GetShareLink(ctx context.Context, chatID string) (*ShareLinkResponse, error) {
+	var link ShareLinkResponse
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/share"
+	if _, err := s.client.Do(ctx, http.MethodGet, path, nil, &link); err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+// DeleteShareLink revokes the chat's share link. Responds 404 when no active
+// link exists.
+func (s *ChatsService) DeleteShareLink(ctx context.Context, chatID string) error {
+	path := "/v1/chats/" + url.PathEscape(chatID) + "/share"
+	_, err := s.client.Do(ctx, http.MethodDelete, path, nil, nil)
+	return err
+}
+
 // WaitForResponse polls a message until its turn finishes and the response
 // populates. Returns the message once Response is non-empty, or an error when
 // the timeout elapses first.

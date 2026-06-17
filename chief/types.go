@@ -351,6 +351,55 @@ type ProjectPage struct {
 	HasMore bool      `json:"has_more"`
 }
 
+// CreateProjectRequest mints a project. It lands in the org and workspace of
+// the caller's root grant; billing is not caller-settable.
+type CreateProjectRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// UpdateProjectRequest replaces a project's two mutable fields. It is a full
+// set, not a patch: an empty Description clears it.
+type UpdateProjectRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// ProjectMember is one user holding a grant in a project. Role is the internal
+// grant name (role.owner, role.collaborator, role.reader); JoinMethod is how
+// the grant was gained (joined.email, joined.domain, joined.link).
+type ProjectMember struct {
+	UserID     string    `json:"user_id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name,omitempty"`
+	Role       string    `json:"role"`
+	JoinMethod string    `json:"join_method"`
+	AddedAt    time.Time `json:"added_at"`
+}
+
+// ProjectMemberList is a project's full participant list.
+type ProjectMemberList struct {
+	Data []ProjectMember `json:"data"`
+}
+
+// CreateProjectInvitationRequest invites one user to the project by email.
+// Role is the short public name: "collaborator", "reader", or "owner".
+type CreateProjectInvitationRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+// ProjectInvitationResponse is the created invitation. Role echoes the short
+// public name from the request. URL is the shareable accept link — the same
+// one sent in the invitation email.
+type ProjectInvitationResponse struct {
+	InvitationID string    `json:"invitation_id"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+	URL          string    `json:"url"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // CreateChatRequest opens a chat with its first turn. Intelligence selects a
 // mode — "fast", "expert", or "research"; an empty value is sent as "auto".
 // Provider biases vendor choice — "automatic", "anthropic", "openai", or
@@ -402,16 +451,22 @@ type SendMessageResponse struct {
 }
 
 // ChatResponse is chat-level metadata. ModifiedAt is nil until the chat has a
-// turn.
+// turn. Visibility and CanManageVisibility are populated on the single-chat
+// read.
 type ChatResponse struct {
-	ChatID     string     `json:"chat_id"`
-	ModifiedAt *time.Time `json:"modified_at,omitempty"`
+	ChatID              string         `json:"chat_id"`
+	ModifiedAt          *time.Time     `json:"modified_at,omitempty"`
+	Visibility          ChatVisibility `json:"visibility,omitempty"`
+	CanManageVisibility *bool          `json:"can_manage_visibility,omitempty"`
 }
 
 // ChatSummary is the per-item shape in a chat listing.
 type ChatSummary struct {
-	ChatID    string    `json:"chat_id"`
-	CreatedAt time.Time `json:"created_at"`
+	ChatID     string         `json:"chat_id"`
+	Title      string         `json:"title,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+	ModifiedAt *time.Time     `json:"modified_at,omitempty"`
+	Visibility ChatVisibility `json:"visibility,omitempty"`
 }
 
 // ChatPage is one page of a chat listing.
@@ -422,15 +477,71 @@ type ChatPage struct {
 	HasMore bool          `json:"has_more"`
 }
 
+// ChatVisibility is a chat's access level: Project lets every project member
+// read the chat, Restricted limits reads to the owner plus the audience
+// managed under the chat's members, and Private is owner-only.
+type ChatVisibility string
+
+// The three levels the API accepts.
+const (
+	ChatVisibilityProject    ChatVisibility = "project"
+	ChatVisibilityRestricted ChatVisibility = "restricted"
+	ChatVisibilityPrivate    ChatVisibility = "private"
+)
+
+// SetChatVisibilityRequest changes a chat's access level. Setting Restricted
+// keeps any audience the chat already had; switching to Project or Private
+// clears it.
+type SetChatVisibilityRequest struct {
+	Visibility ChatVisibility `json:"visibility"`
+}
+
+// ChatVisibilityResponse reports the chat's access level after a change.
+type ChatVisibilityResponse struct {
+	ChatID     string         `json:"chat_id"`
+	Visibility ChatVisibility `json:"visibility"`
+}
+
+// ChatMember is one user in a restricted chat's audience. Audience membership
+// only narrows who can read the chat; it never grants project access.
+type ChatMember struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+	Name   string `json:"name,omitempty"`
+}
+
+// ChatMemberList is a restricted chat's full audience.
+type ChatMemberList struct {
+	Members []ChatMember `json:"members"`
+}
+
+// AddChatMemberRequest adds one user to a restricted chat's audience by email.
+// The email must resolve to a current member of the chat's project.
+type AddChatMemberRequest struct {
+	Email string `json:"email"`
+}
+
+// ShareLinkResponse is a chat's public share-link status. URL and CreatedAt
+// are empty when the chat isn't shared.
+type ShareLinkResponse struct {
+	IsShared  bool       `json:"is_shared"`
+	URL       string     `json:"url,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+}
+
 // Message is one turn: the user prompt and the assistant response under a
 // single id. Prompt and Response stay empty until the async turn finishes
 // writing its recording; there is no status field, so poll GetMessage until
-// the content is present.
+// the content is present. The credit fields are nil until the turn's debit
+// posts, which happens after the workflow completes.
 type Message struct {
-	ID        string     `json:"id"`
-	Prompt    string     `json:"prompt,omitempty"`
-	Response  string     `json:"response,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
+	ID             string     `json:"id"`
+	Prompt         string     `json:"prompt,omitempty"`
+	Response       string     `json:"response,omitempty"`
+	CreatedAt      *time.Time `json:"created_at,omitempty"`
+	IngressCredits *int64     `json:"ingress_credits,omitempty"`
+	EgressCredits  *int64     `json:"egress_credits,omitempty"`
+	TotalCredits   *int64     `json:"total_credits,omitempty"`
 }
 
 // MessageSummary is the per-item shape in a message listing. Content is fetched
