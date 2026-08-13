@@ -317,14 +317,8 @@ type SessionResponse struct {
 	// Language is the transcription code the session was recorded in: "en-US",
 	// "multi" (auto-detect), or a bare "es", "fr", "de", "hi", "it", "ja", "nl",
 	// "pt", "ru".
-	Language string       `json:"language,omitempty"`
-	State    SessionState `json:"state"`
-	// Summary and ActionItems are legacy: they carry the separate post-session
-	// writeup that sessions recorded before the live summary became canonical
-	// were given, and are empty for every session recorded since. LiveSummary is
-	// where a current session's decisions and to-dos live.
-	Summary     string              `json:"summary,omitempty"`
-	ActionItems []string            `json:"action_items,omitempty"`
+	Language    string              `json:"language,omitempty"`
+	State       SessionState        `json:"state"`
 	Turns       []SessionTurn       `json:"turns"`
 	LiveSummary *SessionLiveSummary `json:"live_summary,omitempty"`
 	CreatedAt   time.Time           `json:"created_at"`
