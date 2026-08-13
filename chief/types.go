@@ -241,16 +241,46 @@ type SessionTurn struct {
 	End     float64 `json:"end"`
 }
 
+// SessionLiveSummary is the running summary the model keeps as a session
+// unfolds.
+type SessionLiveSummary struct {
+	Headline string                   `json:"headline,omitempty"`
+	Items    []SessionLiveSummaryItem `json:"items"`
+}
+
+// SessionLiveSummaryItem is one entry in the live summary. Kind is one of
+// "context", "decision", or "todo". State is one of "open", "approved",
+// "dismissed", or "done" and records the user's commitment rather than the
+// model's — a dismissed item is an explicit human call, not a model retraction.
+// ID is stable for the life of the session and survives the model rewording
+// Text, so it keys an item across successive snapshots. FirstSeenSec is an
+// offset in seconds.
+type SessionLiveSummaryItem struct {
+	ID           string  `json:"id"`
+	Kind         string  `json:"kind"`
+	Topic        string  `json:"topic,omitempty"`
+	ParentID     string  `json:"parent_id,omitempty"`
+	Text         string  `json:"text"`
+	Owner        string  `json:"owner,omitempty"`
+	Speaker      string  `json:"speaker,omitempty"`
+	State        string  `json:"state"`
+	Active       bool    `json:"active"`
+	FirstSeenSec float64 `json:"first_seen_sec"`
+}
+
 // SessionResponse is the full session view. Brief is the user-supplied framing;
-// Turns is the transcript.
+// Turns is the transcript. LiveSummary is nil only against a server predating
+// the field — a session that has no summary yet comes back with one whose Items
+// are empty, so nil and empty are not the same answer.
 type SessionResponse struct {
-	SessionID   string        `json:"session_id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Brief       string        `json:"brief,omitempty"`
-	Turns       []SessionTurn `json:"turns"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ModifiedAt  time.Time     `json:"modified_at"`
+	SessionID   string              `json:"session_id"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Brief       string              `json:"brief,omitempty"`
+	Turns       []SessionTurn       `json:"turns"`
+	LiveSummary *SessionLiveSummary `json:"live_summary,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	ModifiedAt  time.Time           `json:"modified_at"`
 }
 
 // CreateSkillRequest mints a skill. Scope is "project" or "user" ("system" is
