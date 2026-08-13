@@ -213,14 +213,39 @@ type UpdateSessionRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// Lifecycle values a SessionState can carry. The server may add to the set, so
+// treat an unrecognized value as data rather than an error.
+const (
+	SessionStateScheduled = "session.scheduled"
+	SessionStateStarted   = "session.started"
+	SessionStateEnded     = "session.ended"
+)
+
+// SessionState is where a session sits in its lifecycle and when it got there.
+// The timestamps are the call's own clock, unlike a session's CreatedAt, which
+// is when the row was opened — a session scheduled from a calendar exists long
+// before it starts. Each is nil until the session reaches that point, and State
+// is empty against a server predating the field.
+type SessionState struct {
+	State       string     `json:"state"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	// CalendarEventID and MeetingURL are set when the session was scheduled from
+	// a calendar event; both empty for an ad-hoc session.
+	CalendarEventID string `json:"calendar_event_id,omitempty"`
+	MeetingURL      string `json:"meeting_url,omitempty"`
+}
+
 // SessionSummary is the per-item shape in a sessions listing. Turns are
 // excluded so the listing stays metadata-only.
 type SessionSummary struct {
-	SessionID   string    `json:"session_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	ModifiedAt  time.Time `json:"modified_at"`
+	SessionID   string       `json:"session_id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	State       SessionState `json:"state"`
+	CreatedAt   time.Time    `json:"created_at"`
+	ModifiedAt  time.Time    `json:"modified_at"`
 }
 
 // SessionPage is one page of a session listing.
@@ -248,21 +273,33 @@ type SessionLiveSummary struct {
 	Items    []SessionLiveSummaryItem `json:"items"`
 }
 
-// SessionLiveSummaryItem is one entry in the live summary. Kind is one of
-// "context", "decision", or "todo". State is one of "open", "approved",
-// "dismissed", or "done" and records the user's commitment rather than the
-// model's — a dismissed item is an explicit human call, not a model retraction.
-// ID is stable for the life of the session and survives the model rewording
-// Text, so it keys an item across successive snapshots. FirstSeenSec is an
-// offset in seconds.
+// Kind and State values a SessionLiveSummaryItem can carry. The server may add
+// to either set, so treat an unrecognized value as data rather than an error.
+const (
+	SummaryKindContext  = "context"
+	SummaryKindDecision = "decision"
+	SummaryKindTodo     = "todo"
+
+	SummaryStateOpen      = "open"
+	SummaryStateApproved  = "approved"
+	SummaryStateDismissed = "dismissed"
+	SummaryStateDone      = "done"
+)
+
+// SessionLiveSummaryItem is one entry in the live summary. State records the
+// user's commitment rather than the model's — a dismissed item is an explicit
+// human call, not a model retraction. ID is stable for the life of the session
+// and survives the model rewording Text, so it keys an item across successive
+// snapshots. FirstSeenSec is an offset in seconds.
 type SessionLiveSummaryItem struct {
-	ID           string  `json:"id"`
-	Kind         string  `json:"kind"`
-	Topic        string  `json:"topic,omitempty"`
-	ParentID     string  `json:"parent_id,omitempty"`
-	Text         string  `json:"text"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Topic    string `json:"topic,omitempty"`
+	ParentID string `json:"parent_id,omitempty"`
+	Text     string `json:"text"`
+	// Owner is a participant name heard in the transcript, empty when nobody was
+	// named. It is never derived from the audio streams.
 	Owner        string  `json:"owner,omitempty"`
-	Speaker      string  `json:"speaker,omitempty"`
 	State        string  `json:"state"`
 	Active       bool    `json:"active"`
 	FirstSeenSec float64 `json:"first_seen_sec"`
@@ -273,10 +310,17 @@ type SessionLiveSummaryItem struct {
 // the field — a session that has no summary yet comes back with one whose Items
 // are empty, so nil and empty are not the same answer.
 type SessionResponse struct {
-	SessionID   string              `json:"session_id"`
-	Name        string              `json:"name"`
-	Description string              `json:"description,omitempty"`
-	Brief       string              `json:"brief,omitempty"`
+	SessionID   string       `json:"session_id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Brief       string       `json:"brief,omitempty"`
+	Language    string       `json:"language,omitempty"`
+	State       SessionState `json:"state"`
+	// Summary and ActionItems come from the post-session writeup, so both are
+	// empty until the session has ended. LiveSummary is the running one and is
+	// populated from the first minutes of the call.
+	Summary     string              `json:"summary,omitempty"`
+	ActionItems []string            `json:"action_items,omitempty"`
 	Turns       []SessionTurn       `json:"turns"`
 	LiveSummary *SessionLiveSummary `json:"live_summary,omitempty"`
 	CreatedAt   time.Time           `json:"created_at"`
