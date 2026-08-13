@@ -231,10 +231,10 @@ type SessionState struct {
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	// CalendarEventID and MeetingURL are set when the session was scheduled from
-	// a calendar event; both empty for an ad-hoc session.
+	// CalendarEventID is set when the session was scheduled from a calendar
+	// event, empty for an ad-hoc session. The API does not expose the call's
+	// join link.
 	CalendarEventID string `json:"calendar_event_id,omitempty"`
-	MeetingURL      string `json:"meeting_url,omitempty"`
 }
 
 // SessionSummary is the per-item shape in a sessions listing. Turns are
@@ -310,15 +310,19 @@ type SessionLiveSummaryItem struct {
 // the field — a session that has no summary yet comes back with one whose Items
 // are empty, so nil and empty are not the same answer.
 type SessionResponse struct {
-	SessionID   string       `json:"session_id"`
-	Name        string       `json:"name"`
-	Description string       `json:"description,omitempty"`
-	Brief       string       `json:"brief,omitempty"`
-	Language    string       `json:"language,omitempty"`
-	State       SessionState `json:"state"`
-	// Summary and ActionItems come from the post-session writeup, so both are
-	// empty until the session has ended. LiveSummary is the running one and is
-	// populated from the first minutes of the call.
+	SessionID   string `json:"session_id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Brief       string `json:"brief,omitempty"`
+	// Language is the transcription code the session was recorded in: "en-US",
+	// "multi" (auto-detect), or a bare "es", "fr", "de", "hi", "it", "ja", "nl",
+	// "pt", "ru".
+	Language string       `json:"language,omitempty"`
+	State    SessionState `json:"state"`
+	// Summary and ActionItems are legacy: they carry the separate post-session
+	// writeup that sessions recorded before the live summary became canonical
+	// were given, and are empty for every session recorded since. LiveSummary is
+	// where a current session's decisions and to-dos live.
 	Summary     string              `json:"summary,omitempty"`
 	ActionItems []string            `json:"action_items,omitempty"`
 	Turns       []SessionTurn       `json:"turns"`
