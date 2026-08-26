@@ -53,6 +53,7 @@ type Client struct {
 	Skills   *SkillsService
 	Memories *MemoriesService
 	Projects *ProjectsService
+	Search   *SearchService
 }
 
 // Option configures a Client during New.
@@ -130,6 +131,7 @@ func New(opts ...Option) (*Client, error) {
 	c.Skills = &SkillsService{client: c}
 	c.Memories = &MemoriesService{client: c}
 	c.Projects = &ProjectsService{client: c}
+	c.Search = &SearchService{client: c}
 	return c, nil
 }
 

@@ -36,6 +36,7 @@ Resources supported by this package:
 - [x] Skills (`/v1/skills`)
 - [x] Memories (`/v1/memories`)
 - [x] Projects (`/v1/projects`)
+- [x] Search (`/v1/search`)
 
 ## Usage
 
@@ -208,6 +209,56 @@ func main() {
 	fmt.Printf("follow-up: %s\n", follow.Response)
 }
 ```
+
+### Searching a project
+
+`Search` runs a semantic search over a project's ingested assets. Results, and
+the passages within each result, come back best first. `RelevanceScore` and
+`Score` run 0 to 1, where a higher number is a stronger match.
+
+```go
+results, err := client.Search.Search(ctx, &chief.SearchRequest{
+	Query:      "What were the Q1 revenue figures?",
+	MaxResults: 5,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, hit := range results.Results {
+	fmt.Printf("%.0f%% %s\n", hit.RelevanceScore*100, hit.Title)
+	for _, chunk := range hit.Chunks {
+		fmt.Printf("    %s\n", chunk.Content)
+	}
+}
+```
+
+Narrow the search by passing a `Scope`. Labels, views, and concepts expand to
+their assets and union with any asset ids given directly:
+
+```go
+results, err := client.Search.Search(ctx, &chief.SearchRequest{
+	Query: "revenue",
+	Scope: &chief.SearchScope{LabelIDs: []string{labelID}},
+})
+```
+
+A nil `Scope` searches the whole project. A non-nil `Scope` whose lists are all
+empty searches nothing — that is how a caller says it wants no project
+knowledge rather than all of it. The two look almost identical on the wire, so
+build the struct deliberately.
+
+Searching is billable when it reads assets that are still being ingested. To
+keep a call fast and cheap, ask for the indexed pass alone:
+
+```go
+results, err := client.Search.Search(ctx, &chief.SearchRequest{
+	Query:   "revenue",
+	Include: []chief.SearchInclude{chief.SearchIncludeUnstructured},
+})
+```
+
+Search requires a paid plan; a free-plan token is refused with 403.
 
 ## Errors
 
