@@ -558,3 +558,74 @@ type MessageSummary struct {
 type MessageList struct {
 	Messages []MessageSummary `json:"messages"`
 }
+
+// SearchInclude names one pass of a knowledge base search. Unstructured is the
+// indexed search and is always required. LLM additionally reads assets that are
+// still being ingested, which is slower and billable.
+type SearchInclude string
+
+// The passes a search may run.
+const (
+	SearchIncludeUnstructured SearchInclude = "unstructured"
+	SearchIncludeLLM          SearchInclude = "llm"
+)
+
+// SearchScope narrows a search to part of a project. Labels, views, and
+// concepts expand to their assets and union with any asset ids given directly.
+//
+// The distinction between a nil scope and an empty one is meaningful: a nil
+// SearchRequest.Scope searches the whole project, while a non-nil scope with
+// every list empty searches nothing. Chat and project ids are deliberately
+// absent — unlike ScopeRequest, this surface accepts neither.
+type SearchScope struct {
+	AssetIDs   []string `json:"asset_ids,omitempty"`
+	LabelIDs   []string `json:"label_ids,omitempty"`
+	ViewIDs    []string `json:"view_ids,omitempty"`
+	ConceptIDs []string `json:"concept_ids,omitempty"`
+}
+
+// SearchRequest is the body for a knowledge base search. Query is required and
+// capped at 1000 characters. MaxResults defaults to 10 server-side and accepts
+// 1 to 50. An empty Include runs every pass.
+type SearchRequest struct {
+	Query      string          `json:"query"`
+	MaxResults int             `json:"max_results,omitempty"`
+	Scope      *SearchScope    `json:"scope,omitempty"`
+	Include    []SearchInclude `json:"include,omitempty"`
+}
+
+// SearchChunk is one matching passage within an asset. Score runs 0 to 1 where
+// higher is a stronger match.
+type SearchChunk struct {
+	Position int     `json:"position"`
+	Score    float64 `json:"score"`
+	Content  string  `json:"content"`
+}
+
+// SearchResult groups one asset's matching passages. RelevanceScore is the
+// asset's best chunk score, on the same 0 to 1 scale.
+type SearchResult struct {
+	AssetID        string        `json:"asset_id"`
+	Title          string        `json:"title"`
+	Filename       string        `json:"filename,omitempty"`
+	MimeType       string        `json:"mime_type,omitempty"`
+	Summary        string        `json:"summary,omitempty"`
+	SizeBytes      uint64        `json:"size_bytes,omitempty"`
+	RelevanceScore float64       `json:"relevance_score"`
+	Chunks         []SearchChunk `json:"chunks"`
+}
+
+// SearchResponse is a completed search. Results and the chunks within each
+// result come back best first.
+//
+// Partial reports that the server's deadline elapsed before every pass
+// finished. The indexed results are still complete when it is set — only the
+// pass over still-ingesting assets can be cut short — so the results remain
+// usable and the caller decides whether to retry.
+type SearchResponse struct {
+	Query        string         `json:"query"`
+	DurationMS   int64          `json:"duration_ms"`
+	TotalResults int            `json:"total_results"`
+	Partial      bool           `json:"partial"`
+	Results      []SearchResult `json:"results"`
+}
