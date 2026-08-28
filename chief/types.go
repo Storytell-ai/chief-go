@@ -213,14 +213,39 @@ type UpdateSessionRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// Lifecycle values a SessionState can carry. The server may add to the set, so
+// treat an unrecognized value as data rather than an error.
+const (
+	SessionStateScheduled = "session.scheduled"
+	SessionStateStarted   = "session.started"
+	SessionStateEnded     = "session.ended"
+)
+
+// SessionState is where a session sits in its lifecycle and when it got there.
+// The timestamps are the call's own clock, unlike a session's CreatedAt, which
+// is when the row was opened — a session scheduled from a calendar exists long
+// before it starts. Each is nil until the session reaches that point, and State
+// is empty against a server predating the field.
+type SessionState struct {
+	State       string     `json:"state"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	// CalendarEventID is set when the session was scheduled from a calendar
+	// event, empty for an ad-hoc session. The API does not expose the call's
+	// join link.
+	CalendarEventID string `json:"calendar_event_id,omitempty"`
+}
+
 // SessionSummary is the per-item shape in a sessions listing. Turns are
 // excluded so the listing stays metadata-only.
 type SessionSummary struct {
-	SessionID   string    `json:"session_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	ModifiedAt  time.Time `json:"modified_at"`
+	SessionID   string       `json:"session_id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	State       SessionState `json:"state"`
+	CreatedAt   time.Time    `json:"created_at"`
+	ModifiedAt  time.Time    `json:"modified_at"`
 }
 
 // SessionPage is one page of a session listing.
@@ -241,16 +266,63 @@ type SessionTurn struct {
 	End     float64 `json:"end"`
 }
 
+// SessionLiveSummary is the running summary the model keeps as a session
+// unfolds.
+type SessionLiveSummary struct {
+	Headline string                   `json:"headline,omitempty"`
+	Items    []SessionLiveSummaryItem `json:"items"`
+}
+
+// Kind and State values a SessionLiveSummaryItem can carry. The server may add
+// to either set, so treat an unrecognized value as data rather than an error.
+const (
+	SummaryKindContext  = "context"
+	SummaryKindDecision = "decision"
+	SummaryKindTodo     = "todo"
+
+	SummaryStateOpen      = "open"
+	SummaryStateApproved  = "approved"
+	SummaryStateDismissed = "dismissed"
+	SummaryStateDone      = "done"
+)
+
+// SessionLiveSummaryItem is one entry in the live summary. State records the
+// user's commitment rather than the model's — a dismissed item is an explicit
+// human call, not a model retraction. ID is stable for the life of the session
+// and survives the model rewording Text, so it keys an item across successive
+// snapshots. FirstSeenSec is an offset in seconds.
+type SessionLiveSummaryItem struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Topic    string `json:"topic,omitempty"`
+	ParentID string `json:"parent_id,omitempty"`
+	Text     string `json:"text"`
+	// Owner is a participant name heard in the transcript, empty when nobody was
+	// named. It is never derived from the audio streams.
+	Owner        string  `json:"owner,omitempty"`
+	State        string  `json:"state"`
+	Active       bool    `json:"active"`
+	FirstSeenSec float64 `json:"first_seen_sec"`
+}
+
 // SessionResponse is the full session view. Brief is the user-supplied framing;
-// Turns is the transcript.
+// Turns is the transcript. LiveSummary is nil only against a server predating
+// the field — a session that has no summary yet comes back with one whose Items
+// are empty, so nil and empty are not the same answer.
 type SessionResponse struct {
-	SessionID   string        `json:"session_id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Brief       string        `json:"brief,omitempty"`
-	Turns       []SessionTurn `json:"turns"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ModifiedAt  time.Time     `json:"modified_at"`
+	SessionID   string `json:"session_id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Brief       string `json:"brief,omitempty"`
+	// Language is the transcription code the session was recorded in: "en-US",
+	// "multi" (auto-detect), or a bare "es", "fr", "de", "hi", "it", "ja", "nl",
+	// "pt", "ru".
+	Language    string              `json:"language,omitempty"`
+	State       SessionState        `json:"state"`
+	Turns       []SessionTurn       `json:"turns"`
+	LiveSummary *SessionLiveSummary `json:"live_summary,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	ModifiedAt  time.Time           `json:"modified_at"`
 }
 
 // CreateSkillRequest mints a skill. Scope is "project" or "user" ("system" is
