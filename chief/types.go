@@ -266,6 +266,31 @@ type SessionTurn struct {
 	End     float64 `json:"end"`
 }
 
+// SessionTranscriptTurn is one turn of a transcript page. Index is the turn's
+// position in the session and the page cursor; blank turns are skipped, so
+// indices on a page can have gaps. SpeakerLabel is "You" for the local mic and
+// "Speaker N" otherwise. At is the m:ss timecode of Start, empty for sessions
+// recorded before turn timing existed (their Start and End are 0).
+type SessionTranscriptTurn struct {
+	Index        int     `json:"index"`
+	Speaker      int     `json:"speaker"`
+	SpeakerLabel string  `json:"speaker_label"`
+	Source       string  `json:"source"`
+	Text         string  `json:"text"`
+	Start        float64 `json:"start"`
+	End          float64 `json:"end"`
+	At           string  `json:"at,omitempty"`
+}
+
+// SessionTranscriptPage is one page of a session's transcript. HasMore reports
+// more turns in the direction the page was requested.
+type SessionTranscriptPage struct {
+	Data    []SessionTranscriptTurn `json:"data"`
+	FirstID string                  `json:"first_id"`
+	LastID  string                  `json:"last_id"`
+	HasMore bool                    `json:"has_more"`
+}
+
 // SessionLiveSummary is the running summary the model keeps as a session
 // unfolds.
 type SessionLiveSummary struct {
