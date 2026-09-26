@@ -31,7 +31,8 @@ func (s *SessionsService) List(ctx context.Context, opts ...ListOption) (*Sessio
 	return &list, nil
 }
 
-// Get returns a session's full view, including its transcript.
+// Get returns a session's metadata, state and live summary. Read its transcript
+// with GetTranscript.
 func (s *SessionsService) Get(ctx context.Context, sessionID string) (*SessionResponse, error) {
 	var session SessionResponse
 	path := "/v1/sessions/" + url.PathEscape(sessionID)
@@ -43,7 +44,8 @@ func (s *SessionsService) Get(ctx context.Context, sessionID string) (*SessionRe
 
 // GetTranscript returns one page of a session's transcript, oldest turn first.
 // With no cursor it starts at the beginning of the meeting; pass the page's
-// LastID to WithAfterID for the next one. Cursors are turn indices, stable once
+// LastID to WithAfterID for the next one, or the session's TurnCount to
+// WithBeforeID for the most recent turns. Cursors are turn indices, stable once
 // the session has ended; while it is still recording, turns merged from another
 // device can shift them.
 func (s *SessionsService) GetTranscript(ctx context.Context, sessionID string, opts ...ListOption) (*SessionTranscriptPage, error) {

@@ -330,10 +330,10 @@ type SessionLiveSummaryItem struct {
 	FirstSeenSec float64 `json:"first_seen_sec"`
 }
 
-// SessionResponse is the full session view. Brief is the user-supplied framing;
-// Turns is the transcript. LiveSummary is nil only against a server predating
-// the field — a session that has no summary yet comes back with one whose Items
-// are empty, so nil and empty are not the same answer.
+// SessionResponse is the full session view. Brief is the user-supplied framing.
+// LiveSummary is nil only against a server predating the field — a session that
+// has no summary yet comes back with one whose Items are empty, so nil and empty
+// are not the same answer.
 type SessionResponse struct {
 	SessionID   string `json:"session_id"`
 	Name        string `json:"name"`
@@ -342,9 +342,16 @@ type SessionResponse struct {
 	// Language is the transcription code the session was recorded in: "en-US",
 	// "multi" (auto-detect), or a bare "es", "fr", "de", "hi", "it", "ja", "nl",
 	// "pt", "ru".
-	Language    string              `json:"language,omitempty"`
-	State       SessionState        `json:"state"`
-	Turns       []SessionTurn       `json:"turns"`
+	Language string       `json:"language,omitempty"`
+	State    SessionState `json:"state"`
+	// Turns is the whole transcript.
+	//
+	// Deprecated: read the transcript with SessionsService.GetTranscript; the
+	// server will stop sending this field.
+	Turns []SessionTurn `json:"turns"`
+	// TurnCount is the number of turns in the transcript, one past its last
+	// index: WithBeforeID(strconv.Itoa(TurnCount)) reads the most recent page.
+	TurnCount   int                 `json:"turn_count"`
 	LiveSummary *SessionLiveSummary `json:"live_summary,omitempty"`
 	CreatedAt   time.Time           `json:"created_at"`
 	ModifiedAt  time.Time           `json:"modified_at"`
