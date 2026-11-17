@@ -726,10 +726,32 @@ type SearchResult struct {
 // finished. The indexed results are still complete when it is set — only the
 // pass over still-ingesting assets can be cut short — so the results remain
 // usable and the caller decides whether to retry.
+//
+// TotalChunks counts the passages across every result, never more than the
+// request's MaxResults. Results groups those passages by asset, so the two
+// counts aren't comparable and neither says what was left out.
 type SearchResponse struct {
-	Query        string         `json:"query"`
-	DurationMS   int64          `json:"duration_ms"`
-	TotalResults int            `json:"total_results"`
-	Partial      bool           `json:"partial"`
-	Results      []SearchResult `json:"results"`
+	Query       string         `json:"query"`
+	DurationMS  int64          `json:"duration_ms"`
+	TotalChunks int            `json:"total_chunks"`
+	Partial     bool           `json:"partial"`
+	Results     []SearchResult `json:"results"`
+}
+
+// TokenScope is what a credential may do.
+type TokenScope string
+
+// The scopes a credential can hold. Write includes read.
+const (
+	TokenScopeRead  TokenScope = "read"
+	TokenScopeWrite TokenScope = "write"
+)
+
+// TokenInfo describes a credential. A personal access token has a nil
+// OrganizationID and both scopes; an OAuth token is pinned to one organization
+// and holds only the scopes its user granted.
+type TokenInfo struct {
+	UserID         string       `json:"user_id"`
+	OrganizationID *string      `json:"organization_id"`
+	Scopes         []TokenScope `json:"scopes"`
 }

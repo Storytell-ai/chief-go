@@ -123,6 +123,13 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
+	c.bindServices()
+	return c, nil
+}
+
+// bindServices points every service at c. A copy of a Client must call it
+// again, or its services keep sending through the original.
+func (c *Client) bindServices() {
 	c.Chats = &ChatsService{client: c}
 	c.Assets = &AssetsService{client: c}
 	c.Labels = &LabelsService{client: c}
@@ -132,7 +139,30 @@ func New(opts ...Option) (*Client, error) {
 	c.Memories = &MemoriesService{client: c}
 	c.Projects = &ProjectsService{client: c}
 	c.Search = &SearchService{client: c}
-	return c, nil
+}
+
+// ProjectID returns the project sent on project-scoped routes, after the
+// CHIEF_PROJECT_ID fallback in New. Empty means none is configured.
+func (c *Client) ProjectID() string { return c.projectID }
+
+// ForProject returns a copy of c that sends projectID on project-scoped
+// routes. c is left unchanged, so a shared Client can hand out per-call
+// copies; each copy shares c's HTTP client and API key.
+func (c *Client) ForProject(projectID string) *Client {
+	scoped := *c
+	scoped.projectID = projectID
+	scoped.bindServices()
+	return &scoped
+}
+
+// Token describes the credential the client authenticates with. An invalid,
+// expired, or revoked credential fails with a 401 (see IsUnauthorized).
+func (c *Client) Token(ctx context.Context) (*TokenInfo, error) {
+	var info TokenInfo
+	if _, err := c.Do(ctx, http.MethodGet, "/v1/token", nil, &info); err != nil {
+		return nil, err
+	}
+	return &info, nil
 }
 
 // newRequest builds an authenticated JSON request. The auth and tenancy
