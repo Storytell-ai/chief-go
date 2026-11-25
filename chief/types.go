@@ -738,6 +738,159 @@ type SearchResponse struct {
 	Results     []SearchResult `json:"results"`
 }
 
+// CaptureSummary is the per-item shape in a capture listing. Recording says
+// whether a Mac is recording it. A server from before project names leaves
+// ProjectName empty, here and wherever else a capture has one.
+type CaptureSummary struct {
+	CaptureID   string    `json:"capture_id"`
+	ProjectID   string    `json:"project_id"`
+	ProjectName string    `json:"project_name"`
+	Title       string    `json:"title"`
+	CreatedAt   time.Time `json:"created_at"`
+	ModifiedAt  time.Time `json:"modified_at"`
+	Recording   bool      `json:"recording"`
+}
+
+// CapturePage is one page of a capture listing.
+type CapturePage struct {
+	Data    []CaptureSummary `json:"data"`
+	FirstID string           `json:"first_id"`
+	LastID  string           `json:"last_id"`
+	HasMore bool             `json:"has_more"`
+}
+
+// CaptureResponse is one capture, without its entries. Recording says whether a
+// Mac is recording it. Reading the entries after it, every page of them, and
+// then the changes from ChangesCursor misses none. A server from before changes
+// leaves the cursor empty.
+type CaptureResponse struct {
+	CaptureID     string    `json:"capture_id"`
+	ProjectID     string    `json:"project_id"`
+	ProjectName   string    `json:"project_name"`
+	Title         string    `json:"title"`
+	EntryCount    int       `json:"entry_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+	Recording     bool      `json:"recording"`
+	ChangesCursor string    `json:"changes_cursor"`
+}
+
+// CaptureChangesResponse is what changed in the caller's captures up to Cursor,
+// which is where to go on from. HasMore says there are more changes past it,
+// whether or not this page holds any. Recording are the captures in scope a Mac
+// is recording, changed or not. Held is Wait's own: how many entries it kept back
+// because recording goes on.
+type CaptureChangesResponse struct {
+	Data      []CaptureChange `json:"data"`
+	Cursor    string          `json:"cursor"`
+	HasMore   bool            `json:"has_more"`
+	Recording []string        `json:"recording"`
+	Held      int             `json:"held,omitempty"`
+}
+
+// CaptureChange is a capture as it is now, with the entries of it that changed.
+// A deleted one has no title and no entries. One with no entries may have been
+// renamed, or moved into scope with entries that didn't change; its entries have
+// to be read. One moved out of scope or out of reach stops arriving, which is
+// not a delete.
+type CaptureChange struct {
+	CaptureID   string               `json:"capture_id"`
+	ProjectID   string               `json:"project_id"`
+	ProjectName string               `json:"project_name"`
+	Title       string               `json:"title"`
+	Deleted     bool                 `json:"deleted"`
+	Entries     []CaptureEntryChange `json:"entries"`
+}
+
+// CaptureEntryChange is an entry that was added, edited or deleted. A deleted one
+// has only its id, kind, author and time. An entry whose id was seen before
+// replaces that one, whoever it says said it and whichever capture it is in.
+type CaptureEntryChange struct {
+	CaptureEntry
+	Deleted bool `json:"deleted"`
+}
+
+// CaptureEntryKind is what one entry of a capture is. The server may add to the
+// set, so treat an unrecognized value as data rather than an error.
+type CaptureEntryKind string
+
+// A thought is typed or spoken. An emphasis is the user marking what was said
+// from 30 seconds before it to 10 seconds after as mattering most.
+const (
+	CaptureEntryThought    CaptureEntryKind = "thought"
+	CaptureEntryQuestion   CaptureEntryKind = "question"
+	CaptureEntryAnswer     CaptureEntryKind = "answer"
+	CaptureEntryScreenshot CaptureEntryKind = "screenshot"
+	CaptureEntryEmphasis   CaptureEntryKind = "emphasis"
+)
+
+// CaptureAuthor is who a capture's entry came from.
+type CaptureAuthor string
+
+// Chief's entries are suggestions, and Other is someone else the recording heard,
+// whom the entry's Speaker names. User is certain only for what wasn't spoken: on
+// an entry with an EndedAt it is a best guess, which anyone near the microphone
+// can have said, better once recording stops and never proof.
+const (
+	CaptureAuthorUser  CaptureAuthor = "user"
+	CaptureAuthorChief CaptureAuthor = "chief"
+	CaptureAuthorOther CaptureAuthor = "other"
+)
+
+// CaptureEntry is one timestamped entry of a capture. EndedAt is set on a spoken
+// thought alone, and an emphasis carries only its time. Name, Width and Height
+// are a screenshot's; the size is the original's, before GetScreenshot fits it.
+type CaptureEntry struct {
+	EntryID string           `json:"entry_id"`
+	Kind    CaptureEntryKind `json:"kind"`
+	Author  CaptureAuthor    `json:"author"`
+	Speaker string           `json:"speaker,omitempty"`
+	At      time.Time        `json:"at"`
+	EndedAt *time.Time       `json:"ended_at,omitempty"`
+	Text    string           `json:"text,omitempty"`
+	Name    string           `json:"name,omitempty"`
+	Width   int              `json:"width,omitempty"`
+	Height  int              `json:"height,omitempty"`
+}
+
+// CaptureEntryPage is one page of a capture's entries, oldest first. HasMore
+// reports more entries in the direction the page was requested.
+type CaptureEntryPage struct {
+	Data    []CaptureEntry `json:"data"`
+	FirstID string         `json:"first_id"`
+	LastID  string         `json:"last_id"`
+	HasMore bool           `json:"has_more"`
+}
+
+// ResolveLinkRequest is a link copied from the Chief app. A capture's share
+// link holds the secret that opens it, so keep the URL out of logs.
+type ResolveLinkRequest struct {
+	URL string `json:"url"`
+}
+
+// LinkType is what a link leads to.
+type LinkType string
+
+// A shared capture is one the caller reads through its link alone, with
+// CapturesService.GetShared.
+const (
+	LinkTypeCapture       LinkType = "capture"
+	LinkTypeSharedCapture LinkType = "shared_capture"
+	LinkTypeSession       LinkType = "session"
+)
+
+// LinkResponse is what a link leads the caller to. A shared capture carries only
+// its title, and a session has no project name. EntryID is the entry a capture's
+// link points at, if any; the capture may not hold it.
+type LinkResponse struct {
+	Type        LinkType `json:"type"`
+	ID          string   `json:"id,omitempty"`
+	ProjectID   string   `json:"project_id,omitempty"`
+	ProjectName string   `json:"project_name,omitempty"`
+	EntryID     string   `json:"entry_id,omitempty"`
+	Title       string   `json:"title"`
+}
+
 // TokenScope is what a credential may do.
 type TokenScope string
 

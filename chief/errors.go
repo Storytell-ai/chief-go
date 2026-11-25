@@ -43,6 +43,9 @@ func IsNotFound(err error) bool { return hasStatus(err, http.StatusNotFound) }
 // IsUnauthorized reports whether err is a 401 from the API.
 func IsUnauthorized(err error) bool { return hasStatus(err, http.StatusUnauthorized) }
 
+// IsGone reports whether err is a 410 from the API.
+func IsGone(err error) bool { return hasStatus(err, http.StatusGone) }
+
 // IsRateLimited reports whether err is a 429 from the API.
 func IsRateLimited(err error) bool { return hasStatus(err, http.StatusTooManyRequests) }
 
