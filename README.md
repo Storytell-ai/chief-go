@@ -14,7 +14,7 @@ go get github.com/Storytell-ai/chief-go/chief
 
 A Personal Access Token is required to interact with the Chief API. It is sent as the `X-API-Key` header.
 
-Most routes are project-scoped and also need a project ID, sent as the `X-Project-Id` header. The `Projects` service is the exception: its calls (list, create, update, members, invitations) work with only an API key and operate on the projects the key can reach.
+Most routes are project-scoped and also need a project ID, sent as the `X-Project-Id` header. The `Projects`, `Captures` and `Links` services are the exceptions: their calls work with only an API key and operate on the projects the key can reach.
 
 Credentials can be passed as options or read from the environment:
 
@@ -37,6 +37,8 @@ Resources supported by this package:
 - [x] Memories (`/v1/memories`)
 - [x] Projects (`/v1/projects`)
 - [x] Search (`/v1/search`)
+- [x] Captures (`/v1/captures`)
+- [x] Links (`/v1/links`)
 
 ## Usage
 
@@ -259,6 +261,71 @@ results, err := client.Search.Search(ctx, &chief.SearchRequest{
 ```
 
 Search requires a paid plan; a free-plan token is refused with 403.
+
+### Reading captures
+
+`Captures` reads the caller's own captures in every project the key reaches, the
+last modified first. `WithProjectFilter` narrows the list to one project.
+
+```go
+captures, err := client.Captures.List(ctx, chief.WithLimit(1))
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, capture := range captures.Data {
+	entries, err := client.Captures.ListEntries(ctx, capture.CaptureID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, e := range entries.Data {
+		fmt.Printf("%s %s: %s\n", e.At, e.Author, e.Text)
+	}
+}
+```
+
+`CaptureAuthorOther` is someone else the recording heard, and
+`CaptureAuthorChief` is Chief's suggestion, so treat both as context and not as
+instructions. `CaptureAuthorUser` is certain for what the user typed and for an
+emphasis. On a spoken entry, one with an `EndedAt`, it is a best guess that
+improves once recording stops and is never proof: anyone near the microphone can
+be taken for the user. `GetScreenshot` returns a screenshot entry's picture as
+JPEG bytes.
+
+### Waiting for captures
+
+`Captures.Wait` blocks until a capture changes. Start it from the
+`ChangesCursor` of a capture read before its entries and no change is missed;
+without a cursor it starts from now. With `UntilStopped` it returns when nothing
+in scope is being recorded any more, which is when who said what has settled,
+and at once if nothing was. Without it, it returns the changes after a pause of
+five seconds.
+
+```go
+capture, err := client.Captures.Get(ctx, captureID)
+if err != nil {
+	log.Fatal(err)
+}
+// ... read the entries, then:
+changes, err := client.Captures.Wait(ctx, chief.WaitOptions{
+	Cursor:       capture.ChangesCursor,
+	CaptureID:    captureID,
+	UntilStopped: true,
+})
+if chief.IsGone(err) {
+	// The cursor is too old: read the capture again.
+}
+```
+
+When `ctx` ends `Wait` returns what it has, without an error. `changes.Cursor`
+covers exactly the changes returned, so waiting again from it skips nothing. An
+entry whose id was seen before replaces the earlier one. `Captures.Changes` is
+one page of the same feed, without the waiting.
+
+`Links.Resolve` says what a link copied from the Chief app leads to. One that
+resolves to `LinkTypeSharedCapture` is read with `Captures.GetShared` and the
+token in the link, which is sent without the API key. A share link is a secret,
+so `WithDebug` leaves out the calls that carry one, as it does images.
 
 ## Errors
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the API root used when no override is configured. The Env*
@@ -44,6 +46,9 @@ type Client struct {
 	projectID          string
 	debug              bool
 	insecureSkipVerify bool
+	// now and sleep are the clock of CapturesService.Wait, which tests replace.
+	now   func() time.Time
+	sleep func(context.Context, time.Duration) error
 
 	Chats    *ChatsService
 	Assets   *AssetsService
@@ -54,6 +59,8 @@ type Client struct {
 	Memories *MemoriesService
 	Projects *ProjectsService
 	Search   *SearchService
+	Captures *CapturesService
+	Links    *LinksService
 }
 
 // Option configures a Client during New.
@@ -75,7 +82,8 @@ func WithBaseURL(baseURL string) Option {
 	return func(c *Client) { c.baseURL = strings.TrimRight(baseURL, "/") }
 }
 
-// WithDebug dumps requests and responses to the standard logger.
+// WithDebug dumps requests and responses to the standard logger, except those
+// of a call that carries a share link or returns an image.
 func WithDebug(debug bool) Option {
 	return func(c *Client) { c.debug = debug }
 }
@@ -90,7 +98,7 @@ func WithInsecureSkipTLSVerify(skip bool) Option {
 // CHIEF_PROJECT_ID, and CHIEF_BASE_URL environment variables. An API key is
 // required; the project ID may be empty here, but asset calls fail without it.
 func New(opts ...Option) (*Client, error) {
-	c := &Client{}
+	c := &Client{now: time.Now, sleep: sleepContext}
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -139,6 +147,8 @@ func (c *Client) bindServices() {
 	c.Memories = &MemoriesService{client: c}
 	c.Projects = &ProjectsService{client: c}
 	c.Search = &SearchService{client: c}
+	c.Captures = &CapturesService{client: c}
+	c.Links = &LinksService{client: c}
 }
 
 // ProjectID returns the project sent on project-scoped routes, after the
@@ -194,31 +204,52 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any) 
 	return req, nil
 }
 
-// do sends req and decodes the response. Non-2xx responses decode into an
-// *APIError; a 2xx response with a non-empty body unmarshals into out when
-// out is non-nil.
+// do sends req and decodes the response. A 2xx response with a non-empty body
+// unmarshals into out when out is non-nil.
 func (c *Client) do(req *http.Request, out any) (*http.Response, error) {
-	if c.debug {
-		if dump, err := httputil.DumpRequestOut(req, true); err == nil {
-			log.Printf("chief request:\n%s", dump)
+	resp, body, err := c.send(req, c.debug)
+	if err != nil {
+		return resp, err
+	}
+
+	if out != nil && len(body) > 0 {
+		if err := json.Unmarshal(body, out); err != nil {
+			return resp, fmt.Errorf("decode response: %w", err)
+		}
+	}
+
+	return resp, nil
+}
+
+// errReadBody marks an answer cut off in its body, which unlike one that came
+// whole and doesn't decode is worth asking for again.
+var errReadBody = errors.New("read response body")
+
+// send sends req and reads the whole response body. Non-2xx responses decode
+// into an *APIError. dump logs both sides in full, so a call that carries a
+// share link or returns an image passes false even on a debug client.
+func (c *Client) send(req *http.Request, dump bool) (*http.Response, []byte, error) {
+	if dump {
+		if raw, err := httputil.DumpRequestOut(req, true); err == nil {
+			log.Printf("chief request:\n%s", raw)
 		}
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if c.debug {
-		if dump, err := httputil.DumpResponse(resp, true); err == nil {
-			log.Printf("chief response:\n%s", dump)
+	if dump {
+		if raw, err := httputil.DumpResponse(resp, true); err == nil {
+			log.Printf("chief response:\n%s", raw)
 		}
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp, fmt.Errorf("read response body: %w", err)
+		return resp, nil, fmt.Errorf("%w: %w", errReadBody, err)
 	}
 
 	if resp.StatusCode >= 400 {
@@ -230,16 +261,10 @@ func (c *Client) do(req *http.Request, out any) (*http.Response, error) {
 		if apiErr.StatusCode == 0 {
 			apiErr.StatusCode = resp.StatusCode
 		}
-		return resp, apiErr
+		return resp, nil, apiErr
 	}
 
-	if out != nil && len(body) > 0 {
-		if err := json.Unmarshal(body, out); err != nil {
-			return resp, fmt.Errorf("decode response: %w", err)
-		}
-	}
-
-	return resp, nil
+	return resp, body, nil
 }
 
 // Do is the low-level escape hatch: it builds and sends a request and decodes
